@@ -230,6 +230,42 @@ Visit `http://localhost:8000` and login with credentials from `.env`
 6. Set all environment variables
 7. Update `TELEGRAM_WEBHOOK_URL` to Railway URL
 
+Make sure the Telegram bot's webhook is registerd properly:
+
+```bash
+curl https://api.telegram.org/<telegram-token>/getWebhookInfo
+```
+
+If not, register Telegram bot's webhook manually:
+
+```bash
+curl -X POST "https://api.telegram.org/<telegram-token>/setWebhook?url=https://<railwat-base-url>/webhook/telegram"
+```
+
+## Webhook Persistence
+
+**Important:** Telegram webhooks are persistent and survive service restarts.
+
+- ✅ The webhook is set once during startup
+- ✅ It persists even when Railway restarts your service
+- ✅ You don't need to manually set it after each deployment
+
+**When to manually manage webhooks:**
+
+If you need to delete the webhook (e.g., switching to polling mode):
+```bash
+# Delete webhook
+curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/deleteWebhook"
+
+# Or set to empty
+curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url="
+```
+
+To verify webhook status anytime:
+```bash
+curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo"
+```
+
 ## Troubleshooting
 
 ### "No module named 'services'"
