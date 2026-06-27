@@ -207,9 +207,12 @@ class DatabaseService:
                 cursor.close()
 
     async def update_team(self, team_id: int, team: TeamModel) -> bool:
-        """Update a team and all its related entities."""
+        """
+        Update a team and intelligently merge its related entities.
+        This preserves existing records (and their evaluations) when possible.
+        """
         async with self._get_connection() as conn:
-            cursor = conn.cursor()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
             try:
                 # Update team
                 cursor.execute(
@@ -221,43 +224,143 @@ class DatabaseService:
                     (team.name_ar, team.name_en, team.timezone, team_id)
                 )
 
-                # Delete existing related entities
-                cursor.execute("DELETE FROM recipients WHERE team_id = %s", (team_id,))
-                cursor.execute("DELETE FROM evaluators WHERE team_id = %s", (team_id,))
-                cursor.execute("DELETE FROM classifications WHERE team_id = %s", (team_id,))
+                # ============================================================
+                # Recipients: Match by name_en (preserve IDs to keep evaluations)
+                # ============================================================
 
-                # Insert new recipients
+                # Get existing recipients
+                cursor.execute(
+                    "SELECT * FROM recipients WHERE team_id = %s",
+                    (team_id,)
+                )
+                existing_recipients = {row['name_en']: row for row in cursor.fetchall()}
+
+                # Track which ones to keep
+                new_recipient_names = {r.name_en for r in team.recipients}
+
+                # Update or insert recipients
                 for recipient in team.recipients:
-                    cursor.execute(
-                        """
-                        INSERT INTO recipients (team_id, name_ar, name_en, date_of_birth)
-                        VALUES (%s, %s, %s, %s)
-                        """,
-                        (team_id, recipient.name_ar, recipient.name_en, recipient.date_of_birth)
-                    )
+                    if recipient.name_en in existing_recipients:
+                        # Update existing recipient
+                        cursor.execute(
+                            """
+                            UPDATE recipients
+                            SET name_ar = %s, date_of_birth = %s
+                            WHERE id = %s
+                            """,
+                            (recipient.name_ar, recipient.date_of_birth,
+                             existing_recipients[recipient.name_en]['id'])
+                        )
+                    else:
+                        # Insert new recipient
+                        cursor.execute(
+                            """
+                            INSERT INTO recipients (team_id, name_ar, name_en, date_of_birth)
+                            VALUES (%s, %s, %s, %s)
+                            """,
+                            (team_id, recipient.name_ar, recipient.name_en, recipient.date_of_birth)
+                        )
 
-                # Insert new evaluators
+                # Delete recipients that are no longer in the team
+                for name_en, existing in existing_recipients.items():
+                    if name_en not in new_recipient_names:
+                        cursor.execute(
+                            "DELETE FROM recipients WHERE id = %s",
+                            (existing['id'],)
+                        )
+
+                # ============================================================
+                # Evaluators: Match by device_id (preserve IDs to keep evaluations)
+                # ============================================================
+
+                # Get existing evaluators
+                cursor.execute(
+                    "SELECT * FROM evaluators WHERE team_id = %s",
+                    (team_id,)
+                )
+                existing_evaluators = {row['device_id']: row for row in cursor.fetchall()}
+
+                # Track which ones to keep
+                new_device_ids = {e.device_id for e in team.evaluators}
+
+                # Update or insert evaluators
                 for evaluator in team.evaluators:
-                    cursor.execute(
-                        """
-                        INSERT INTO evaluators (team_id, name_ar, name_en, device_id)
-                        VALUES (%s, %s, %s, %s)
-                        """,
-                        (team_id, evaluator.name_ar, evaluator.name_en, evaluator.device_id)
-                    )
+                    if evaluator.device_id in existing_evaluators:
+                        # Update existing evaluator
+                        cursor.execute(
+                            """
+                            UPDATE evaluators
+                            SET name_ar = %s, name_en = %s
+                            WHERE id = %s
+                            """,
+                            (evaluator.name_ar, evaluator.name_en,
+                             existing_evaluators[evaluator.device_id]['id'])
+                        )
+                    else:
+                        # Insert new evaluator
+                        cursor.execute(
+                            """
+                            INSERT INTO evaluators (team_id, name_ar, name_en, device_id)
+                            VALUES (%s, %s, %s, %s)
+                            """,
+                            (team_id, evaluator.name_ar, evaluator.name_en, evaluator.device_id)
+                        )
 
-                # Insert new classifications
+                # Delete evaluators that are no longer in the team
+                for device_id, existing in existing_evaluators.items():
+                    if device_id not in new_device_ids:
+                        cursor.execute(
+                            "DELETE FROM evaluators WHERE id = %s",
+                            (existing['id'],)
+                        )
+
+                # ============================================================
+                # Classifications: Match by name (these don't link to evaluations)
+                # ============================================================
+
+                # Get existing classifications
+                cursor.execute(
+                    "SELECT * FROM classifications WHERE team_id = %s",
+                    (team_id,)
+                )
+                existing_classifications = {row['name']: row for row in cursor.fetchall()}
+
+                # Track which ones to keep
+                new_classification_names = {c.name for c in team.classifications}
+
+                # Update or insert classifications
                 for classification in team.classifications:
-                    cursor.execute(
-                        """
-                        INSERT INTO classifications (team_id, name, weight)
-                        VALUES (%s, %s, %s)
-                        """,
-                        (team_id, classification.name, classification.weight)
-                    )
+                    if classification.name in existing_classifications:
+                        # Update existing classification (weight might change)
+                        cursor.execute(
+                            """
+                            UPDATE classifications
+                            SET weight = %s
+                            WHERE id = %s
+                            """,
+                            (classification.weight,
+                             existing_classifications[classification.name]['id'])
+                        )
+                    else:
+                        # Insert new classification
+                        cursor.execute(
+                            """
+                            INSERT INTO classifications (team_id, name, weight)
+                            VALUES (%s, %s, %s)
+                            """,
+                            (team_id, classification.name, classification.weight)
+                        )
+
+                # Delete classifications that are no longer in the team
+                for name, existing in existing_classifications.items():
+                    if name not in new_classification_names:
+                        cursor.execute(
+                            "DELETE FROM classifications WHERE id = %s",
+                            (existing['id'],)
+                        )
 
                 conn.commit()
-                logger.info(f"Team {team_id} updated successfully")
+                logger.info(f"Team {team_id} updated successfully (preserving evaluations)")
                 return True
 
             except Exception as e:
