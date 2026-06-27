@@ -242,6 +242,51 @@ If not, register Telegram bot's webhook manually:
 curl -X POST "https://api.telegram.org/<telegram-token>/setWebhook?url=https://<railwat-base-url>/webhook/telegram"
 ```
 
+## Team Updates and Evaluation Preservation
+
+**Important:** When updating a team, the system intelligently preserves evaluation history.
+
+### How Team Updates Work:
+
+**Recipients** (matched by `name_en`):
+- ✅ Existing recipients are **updated** (preserves their ID and all evaluations)
+- ✅ New recipients are **added**
+- ⚠️ Removed recipients are **deleted** (CASCADE deletes their evaluations)
+
+**Evaluators** (matched by `device_id`):
+- ✅ Existing evaluators are **updated** (preserves their ID and all evaluations)
+- ✅ New evaluators are **added**
+- ⚠️ Removed evaluators are **deleted** (CASCADE deletes their evaluations)
+
+**Classifications** (matched by `name`):
+- ✅ Existing classifications are **updated** (weight can change)
+- ✅ New classifications are **added**
+- ✅ Removed classifications are **deleted** (safe - doesn't delete evaluations)
+
+### Best Practices:
+
+**To preserve evaluations:**
+- Keep `name_en` consistent for recipients (renaming loses history)
+- Keep `device_id` consistent for evaluators
+- Update `name_ar` freely (doesn't break matching)
+
+**Example - Safe Update:**
+```bash
+# Updating Sara's Arabic name - SAFE, preserves evaluations
+# Before: "name_ar": "سارة"
+# After:  "name_ar": "سارة العوض"
+# Matching by device_id "SARA_AWAD_USER_ID" preserves all her evaluations
+```
+
+**Example - Unsafe Update:**
+```bash
+# Changing Khaled's English name - LOSES HISTORY
+# Before: "name_en": "Khaled"
+# After:  "name_en": "Khalid"
+# System sees this as deleting "Khaled" and adding "Khalid"
+# All evaluations for "Khaled" are CASCADE deleted
+```
+
 ## Webhook Persistence
 
 **Important:** Telegram webhooks are persistent and survive service restarts.
