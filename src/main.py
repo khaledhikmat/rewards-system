@@ -106,9 +106,9 @@ async def lifespan(app: FastAPI):
     # Cleanup on shutdown
     logger.info("Shutting down Rewards System Processor...")
 
-    # Delete webhook
-    if telegram_handler:
-        await telegram_handler.delete_webhook()
+    # Note: We don't delete the Telegram webhook on shutdown.
+    # Webhooks should persist across service restarts.
+    # Only delete manually if you need to switch to polling mode.
 
     # Disconnect from database
     if db_service:

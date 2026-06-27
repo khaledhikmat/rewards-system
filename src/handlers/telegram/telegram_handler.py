@@ -93,6 +93,17 @@ class TelegramHandler:
             if not self.application:
                 logger.error("Telegram application not initialized")
                 return False
+
+            # Validate webhook URL is not empty
+            if not webhook_url or not webhook_url.strip():
+                logger.error("Webhook URL is empty or not set. Check TELEGRAM_WEBHOOK_URL environment variable.")
+                return False
+
+            # Validate it's a proper HTTPS URL
+            if not webhook_url.startswith("https://"):
+                logger.error(f"Webhook URL must start with https://. Got: {webhook_url}")
+                return False
+
             await self.application.bot.set_webhook(url=webhook_url)
             logger.info(f"Webhook set to: {webhook_url}")
             return True
