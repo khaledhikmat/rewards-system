@@ -210,7 +210,7 @@ Send to your bot:
 ```
 /help
 /eval Ahmed cleaned his room
-/report Ahmed 2026-06-20
+/report Ahmed today
 ```
 
 ### 8. Access Dashboard

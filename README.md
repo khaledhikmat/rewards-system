@@ -240,11 +240,18 @@ Example:
 /eval Ahmed Did homework without being asked
 ```
 
-### `/report <recipient_name> <YYYY-MM-DD>`
+### `/report <recipient_name> <date>`
 Get evaluation report for a specific date.
 
-Example:
+**Date formats:**
+- `today` - Get today's evaluations
+- `yesterday` - Get yesterday's evaluations
+- `YYYY-MM-DD` - Get evaluations for a specific date
+
+Examples:
 ```
+/report Ahmed today
+/report Ahmed yesterday
 /report Ahmed 2026-06-20
 ```
 
